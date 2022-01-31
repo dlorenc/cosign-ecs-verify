@@ -51,17 +51,6 @@ You should [configure the AWS CLI] for your project and account.
 We need a key against which to verify image signatures. If you have an existing
 keypair for cosign in AWS KMS, set it:
 
-``` shell
-export KEY_ALIAS=my-key
-```
-
-Otherwise, we can make one:
-
-``` shell
-export KEY_ALIAS=my-key
-make key_gen
-```
-
 ## Deploy
 
 To deploy, run:
@@ -89,62 +78,6 @@ This uses a SAM template (`template.yml`) to create:
     
 
 ## Test it
-
-### Signed and unsigned images
-
-To see this demo in action, you need an example of a signed and unsigned image.
-
-If you already have a such images (ex. from a [previous post on the Chainguard blog][previous-blog]), we can use those:
-
-[previous-blog]: https://blog.chainguard.dev/cosign-image-signing-in-aws-codepipeline/
-
-```shell
-export IMAGE_URL_SIGNED=...
-export IMAGE_URL_UNSIGNED=...
-```
-
-Otherwise, we'll build two simple images, push them to Amazon [ECR], and sign only one.
-
-[ECR]: https://aws.amazon.com/ecr/
-
-First, login to ECR with Docker. We recommend using a [credential helper] for
-docker, but we also provide a Make target `make ecr_auth` that will authenticate
-
-``` shell
-aws ecr create-repository --repository-name $REPO_NAME
-```
-you to the default registry.
-
-[credential helper]: https://aws.amazon.com/blogs/compute/authenticating-amazon-ecr-repositories-for-docker-cli-with-credential-helper/
-
-Then, we can create a repository for the signed/unsigned images.
-
-```shell
-REPO_NAME=ecr-demo-image
-REPO_URL=$(aws ecr create-repository \
-    --repository-name $REPO_NAME \
-    --query repository.repositoryUri \
-    --output text)
-```
-Finally, we can build and push two simple images (see `Dockerfile`):
-
-``` shell
-# Export these so we can make ECR task definitions for running them.
-export IMAGE_URL_SIGNED=$REPO_URL:signed
-export IMAGE_URL_UNSIGNED=$REPO_URL:unsigned
-# Make 2 example images and push both.
-# The --build-arg is to make sure the images have different digests.
-docker build . --build-arg signed=true --tag $IMAGE_URL_SIGNED
-docker build . --build-arg signed=false --tag $IMAGE_URL_UNSIGNED
-docker push $IMAGE_URL_SIGNED
-docker push $IMAGE_URL_UNSIGNED
-```
-
-And sign *only one of them*:
-
-``` shell
-cosign sign --key awskms:///alias/$KEY_ALIAS $IMAGE_URL_SIGNED
-```
 
 ### Deploy a cluster and run tasks
 
@@ -188,14 +121,6 @@ You should see the unsigned task in the `STOPPED` tasks and the signed task in t
 make stop_tasks
 make tf_destroy
 make sam_delete
-# If you created an ECR repository (--force deletes the images in it):
-aws ecr delete-repository --repository-name $REPO_NAME --force
-# Clean up Docker mages locally
-docker images "*/$REPO_NAME" | xargs docker image rm --force
-# To clean up the KMS key used for signing:
-KEY_ID=$(aws kms describe-key --alias $KEY_ALIAS)
-aws kms delete-alias $KEY_ALIAS
-aws kms disable-key $KEY_ID
 ```
 
 
